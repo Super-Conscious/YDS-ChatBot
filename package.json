@@ -1,0 +1,29 @@
+{
+  "name": "yds-chatbot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "ingest": "npx tsx src/ingest/ingest.ts",
+    "ask": "npx tsx src/test-ask.ts",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Super-Conscious/YDS-ChatBot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Super-Conscious/YDS-ChatBot/issues"
+  },
+  "homepage": "https://github.com/Super-Conscious/YDS-ChatBot#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
+    "@supabase/supabase-js": "^2.103.3",
+    "dotenv": "^17.4.2",
+    "typescript": "^6.0.2"
+  }
+}
