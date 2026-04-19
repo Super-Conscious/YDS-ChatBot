@@ -4,9 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "fetch": "npx tsx src/ingest/fetch-yds.ts",
     "ingest": "npx tsx src/ingest/ingest.ts",
     "ask": "npx tsx src/test-ask.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "deploy": "npx wrangler pages deploy public --project-name=yds-chatbot",
+    "dev": "npx wrangler pages dev public"
   },
   "repository": {
     "type": "git",
@@ -21,9 +24,11 @@
   },
   "homepage": "https://github.com/Super-Conscious/YDS-ChatBot#readme",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.90.0",
     "@supabase/supabase-js": "^2.103.3",
     "dotenv": "^17.4.2",
     "typescript": "^6.0.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.83.0"
   }
 }

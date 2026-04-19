@@ -1,11 +1,11 @@
 /**
- * RAG pipeline: embed question → vector search → Claude answer.
+ * RAG pipeline: embed question → vector search → Gemini answer.
  */
-import Anthropic from '@anthropic-ai/sdk'
 import { sb } from './supabase.js'
 import { embedSingle } from './embeddings.js'
 
-const anthropic = new Anthropic()
+const GEMINI_MODEL = 'gemini-2.5-flash'
+const GEMINI_API = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
 interface ChunkMatch {
   id: number
@@ -23,14 +23,15 @@ When referencing specific features or steps, be precise. If multiple articles ar
 Keep answers concise and actionable.`
 
 export async function ask(question: string): Promise<{ answer: string; sources: { title: string; url: string }[] }> {
-  // 1. Embed the question
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
+
   const questionVec = await embedSingle(question)
 
-  // 2. Vector similarity search
   const { data: chunks, error } = await sb.rpc('match_chunks', {
     query_embedding: questionVec,
     match_count: 5,
-    match_threshold: 0.7,
+    match_threshold: 0.3,
   })
 
   if (error) throw new Error(`Vector search failed: ${error.message}`)
@@ -44,27 +45,32 @@ export async function ask(question: string): Promise<{ answer: string; sources: 
     }
   }
 
-  // 3. Build context from matched chunks
   const context = matches
     .map((m, i) => `[Source ${i + 1}: "${m.title}"]\n${m.content}`)
     .join('\n\n---\n\n')
 
-  // 4. Ask Claude with context
-  const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: `Context from the Yellow Dog knowledge base:\n\n${context}\n\n---\n\nQuestion: ${question}`,
-      },
-    ],
+  const userMessage = `Context from the Yellow Dog knowledge base:\n\n${context}\n\n---\n\nQuestion: ${question}`
+
+  const res = await fetch(`${GEMINI_API}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+      generationConfig: { maxOutputTokens: 1024, temperature: 0.2 },
+    }),
   })
 
-  const answer = msg.content[0]?.type === 'text' ? msg.content[0].text : ''
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Gemini generation failed: ${res.status} ${err}`)
+  }
 
-  // 5. Deduplicate sources
+  const json = await res.json() as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[]
+  }
+  const answer = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+
   const seen = new Set<string>()
   const sources = matches
     .filter(m => {

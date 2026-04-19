@@ -8,7 +8,7 @@ create table kb_chunks (
   url text not null,               -- source URL
   category text,                   -- KB category name
   content text not null,           -- chunk text (~500 tokens)
-  embedding vector(1536),          -- OpenAI text-embedding-3-small dimension
+  embedding vector(768),           -- Gemini text-embedding-004 dimension
   created_at timestamptz default now()
 );
 
@@ -18,7 +18,7 @@ create index on kb_chunks using ivfflat (embedding vector_cosine_ops)
 
 -- Function to search by similarity
 create or replace function match_chunks(
-  query_embedding vector(1536),
+  query_embedding vector(768),
   match_count int default 5,
   match_threshold float default 0.7
 )

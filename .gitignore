@@ -1,3 +1,7 @@
 node_modules/
 dist/
 .env
+.env.local
+.wrangler/
+articles.json
+articles_remaining.json

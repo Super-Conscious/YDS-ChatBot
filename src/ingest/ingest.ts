@@ -11,6 +11,7 @@
  *
  * This is populated by the scraper (Phase 1) or Zoho Desk API.
  */
+import 'dotenv/config'
 import { readFileSync } from 'fs'
 import { sb } from '../supabase.js'
 import { embed } from '../embeddings.js'

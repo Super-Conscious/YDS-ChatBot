@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yellow Dog Help</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #252525; background: #f6f6f6; }
+  body { display: flex; flex-direction: column; max-width: 760px; margin: 0 auto; padding: 20px; gap: 16px; }
+  header { padding: 12px 0; border-bottom: 2px solid #B49E0E; display: flex; align-items: center; justify-content: space-between; }
+  h1 { font-size: 18px; font-weight: 600; }
+  .tag { font-size: 11px; color: #777; background: #eee; padding: 2px 8px; border-radius: 4px; }
+  #chat { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding: 8px 4px; min-height: 300px; }
+  .msg { padding: 12px 16px; border-radius: 10px; line-height: 1.5; max-width: 90%; }
+  .msg.user { background: #252525; color: #fff; align-self: flex-end; }
+  .msg.bot { background: #fff; border: 1px solid #e1e1e1; align-self: flex-start; }
+  .msg.bot p { margin-bottom: 8px; }
+  .msg.bot p:last-child { margin-bottom: 0; }
+  .msg.bot ol, .msg.bot ul { margin: 8px 0 8px 20px; }
+  .msg.bot code { background: #f1f1f1; padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+  .sources { margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee; font-size: 12px; color: #666; }
+  .sources-label { font-weight: 600; margin-bottom: 4px; }
+  .sources a { color: #B49E0E; text-decoration: none; display: block; margin-top: 3px; }
+  .sources a:hover { text-decoration: underline; }
+  .loading { color: #999; font-style: italic; }
+  form { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid #e1e1e1; }
+  input[type=text] { flex: 1; padding: 12px 14px; font-size: 15px; border: 1px solid #ccc; border-radius: 8px; outline: none; font-family: inherit; }
+  input[type=text]:focus { border-color: #B49E0E; }
+  button { padding: 12px 20px; font-size: 15px; background: #252525; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-family: inherit; }
+  button:hover { background: #444; }
+  button:disabled { background: #aaa; cursor: not-allowed; }
+  .empty { color: #888; text-align: center; padding: 40px 20px; font-size: 14px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Yellow Dog Help</h1>
+    <span class="tag">POC · RAG over KB</span>
+  </header>
+
+  <div id="chat">
+    <div class="empty" id="empty">Ask a question about Yellow Dog Inventory. I'll answer from the 994-article knowledge base.</div>
+  </div>
+
+  <form id="form">
+    <input type="text" id="q" placeholder="e.g. How do I set par levels?" autocomplete="off" required>
+    <button type="submit" id="send">Ask</button>
+  </form>
+
+<script>
+const chat = document.getElementById('chat');
+const form = document.getElementById('form');
+const input = document.getElementById('q');
+const btn = document.getElementById('send');
+const empty = document.getElementById('empty');
+
+function esc(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderMd(text) {
+  const escaped = esc(text);
+  return escaped
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^/, '<p>')
+    .concat('</p>');
+}
+
+function addMsg(cls, html) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + cls;
+  el.innerHTML = html;
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+  return el;
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const question = input.value.trim();
+  if (!question) return;
+
+  empty.style.display = 'none';
+  addMsg('user', esc(question));
+  input.value = '';
+  btn.disabled = true;
+
+  const loading = addMsg('bot', '<span class="loading">Searching the knowledge base…</span>');
+
+  try {
+    const res = await fetch('/api/ask', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ question })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      loading.innerHTML = '<strong>Error:</strong> ' + esc(data.error || 'request failed');
+      return;
+    }
+
+    let html = renderMd(data.answer);
+    if (data.sources && data.sources.length > 0) {
+      html += '<div class="sources"><div class="sources-label">Sources</div>' +
+        data.sources.map(s => `<a href="${esc(s.url)}" target="_blank">${esc(s.title)}</a>`).join('') +
+        '</div>';
+    }
+    loading.innerHTML = html;
+  } catch (err) {
+    loading.innerHTML = '<strong>Error:</strong> ' + esc(err.message);
+  } finally {
+    btn.disabled = false;
+    input.focus();
+  }
+});
+
+input.focus();
+</script>
+</body>
+</html>

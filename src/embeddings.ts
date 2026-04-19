@@ -1,31 +1,54 @@
 /**
- * Generate embeddings via OpenAI text-embedding-3-small.
- * Cheapest option at $0.02/1M tokens — 213 articles costs ~$0.01.
+ * Generate embeddings via Google Gemini embedding-001.
+ *
+ * Model natively outputs 3072 dims; we truncate to 768 via outputDimensionality
+ * (Matryoshka representation — pgvector ivfflat caps at 2000 dims per vector).
  */
 
-const OPENAI_API = 'https://api.openai.com/v1/embeddings'
-const MODEL = 'text-embedding-3-small'
+const MODEL = 'models/gemini-embedding-001'
+const OUTPUT_DIMS = 768
+const BATCH_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:batchEmbedContents`
+
+interface EmbedResponse {
+  embeddings: { values: number[] }[]
+}
 
 export async function embed(texts: string[]): Promise<number[][]> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) throw new Error('OPENAI_API_KEY not set')
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
-  const res = await fetch(OPENAI_API, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ input: texts, model: MODEL }),
-  })
+  const requests = texts.map(text => ({
+    model: MODEL,
+    content: { parts: [{ text }] },
+    outputDimensionality: OUTPUT_DIMS,
+  }))
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`OpenAI embedding failed: ${res.status} ${err}`)
+  const MAX_RETRIES = 6
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const res = await fetch(`${BATCH_ENDPOINT}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    })
+
+    if (res.ok) {
+      const json = (await res.json()) as EmbedResponse
+      return json.embeddings.map(e => e.values)
+    }
+
+    const errText = await res.text()
+
+    if (res.status === 429) {
+      const retryMatch = errText.match(/"retryDelay":\s*"(\d+)s"/)
+      const waitS = retryMatch ? parseInt(retryMatch[1]!, 10) + 2 : 60
+      console.log(`    429 rate-limited. Waiting ${waitS}s (attempt ${attempt + 1}/${MAX_RETRIES})`)
+      await new Promise(r => setTimeout(r, waitS * 1000))
+      continue
+    }
+
+    throw new Error(`Gemini embedding failed: ${res.status} ${errText}`)
   }
-
-  const json = await res.json()
-  return json.data.map((d: { embedding: number[] }) => d.embedding)
+  throw new Error(`Gemini embedding gave up after ${MAX_RETRIES} retries`)
 }
 
 export async function embedSingle(text: string): Promise<number[]> {
