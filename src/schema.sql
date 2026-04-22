@@ -44,3 +44,25 @@ as $$
   order by embedding <=> query_embedding
   limit match_count;
 $$;
+
+-- Escalation fallback: when the bot answer is flagged as unhelpful and Zoho
+-- ticket creation either isn't configured yet or fails, we log the request
+-- here so nothing is lost. Rows can be manually forwarded into Zoho or cleaned
+-- up after the Zoho integration goes live.
+create table if not exists escalations (
+  id bigint generated always as identity primary key,
+  name text not null,
+  company text,
+  email text not null,
+  phone text,
+  description text not null,
+  original_question text,
+  bot_answer text,
+  sources jsonb default '[]'::jsonb,
+  status text default 'pending',      -- pending | forwarded | ignored
+  zoho_ticket_id text,                -- populated after manual forward
+  created_at timestamptz default now()
+);
+
+create index if not exists escalations_created_at_idx on escalations (created_at desc);
+create index if not exists escalations_status_idx on escalations (status);
