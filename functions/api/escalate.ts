@@ -55,12 +55,23 @@ function buildSubject(originalQuestion: string): string {
   return `Help bot escalation: ${trimmed}`
 }
 
-function buildDescriptionHtml(body: Required<Pick<Body, 'description' | 'originalQuestion' | 'botAnswer'>> & { sources?: Body['sources'] }): string {
+function buildDescriptionHtml(body: Required<Pick<Body, 'description' | 'originalQuestion' | 'botAnswer'>> & { sources?: Body['sources']; company?: string }): string {
   const sourcesHtml = (body.sources && body.sources.length > 0)
     ? `<p><strong>Sources the bot cited:</strong></p><ul>${body.sources.map(s => `<li><a href="${escapeHtml(s.url)}">${escapeHtml(s.title)}</a></li>`).join('')}</ul>`
     : ''
 
+  // Include Company in the description body as well. Zoho only routes the
+  // `company` value into the proper Company custom field when
+  // ZOHO_COMPANY_FIELD_ID is configured; without that field ID, company
+  // would be silently dropped. Surfacing it here guarantees YDS staff can
+  // see which company submitted the ticket even before the field ID is
+  // wired up.
+  const companyHtml = body.company
+    ? `<p><strong>Company:</strong> ${escapeHtml(body.company)}</p>`
+    : ''
+
   return [
+    companyHtml,
     '<p><strong>User description:</strong></p>',
     `<p>${escapeHtml(body.description).replace(/\n/g, '<br>')}</p>`,
     '<hr>',
@@ -117,6 +128,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     originalQuestion: originalQuestion || '(not captured)',
     botAnswer: botAnswer || '(not captured)',
     sources: body.sources,
+    company,
   })
 
   // Primary path: create a real Zoho Desk ticket
